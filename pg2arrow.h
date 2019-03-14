@@ -214,19 +214,25 @@ sql_buffer_append_zero(SQLbuffer *buf, size_t len)
 }
 
 static inline void
-sql_buffer_setbit(SQLbuffer *buf, size_t index)
+sql_buffer_setbit(SQLbuffer *buf, size_t __index)
 {
-	size_t		required = BITMAPLEN(index+1);
-	sql_buffer_expand(buf, required);
-	((uint8 *)buf->ptr)[index>>3] |= (1 << (index & 7));
+	size_t		index = __index >> 3;
+	int			mask  = (1 << (__index & 7));
+
+	sql_buffer_expand(buf, index + 1);
+	((uint8 *)buf->ptr)[index] |= mask;
+	buf->usage = Max(buf->usage, index + 1);
 }
 
 static inline void
-sql_buffer_clrbit(SQLbuffer *buf, size_t index)
+sql_buffer_clrbit(SQLbuffer *buf, size_t __index)
 {
-	size_t		required = BITMAPLEN(index+1);
-	sql_buffer_expand(buf, required);
-	((uint8 *)buf->ptr)[index>>3] &= ~(1 << (index & 7));
+	size_t		index = __index >> 3;
+	int			mask  = (1 << (__index & 7));
+
+	sql_buffer_expand(buf, index + 1);
+	((uint8 *)buf->ptr)[index] &= ~mask;
+	buf->usage = Max(buf->usage, index + 1);
 }
 
 static inline void
