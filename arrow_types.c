@@ -289,26 +289,21 @@ put_bpchar_value(SQLattribute *attr,
 				 const char *addr, int sz)
 {
 	size_t		row_index = attr->nitems++;
+	int			len = attr->atttypmod;
+	char	   *temp = alloca(len);
 
-	if (row_index == 0)
-		sql_buffer_append_zero(&attr->values, sizeof(uint32));
+	memset(temp, ' ', len);
 	if (!addr)
 	{
 		attr->nullcount++;
 		sql_buffer_clrbit(&attr->nullmap, row_index);
-		sql_buffer_append(&attr->values, &attr->extra.usage, sizeof(uint32));
+		sql_buffer_append(&attr->values, temp, len);
 	}
 	else
 	{
-		char   *temp = alloca(sz+1);
-
-		/* trim spaces in the tail */
-		memcpy(temp, addr, sz);
-		while (sz > 0 && temp[sz-1]==' ')
-			sz--;
+		memcpy(temp, addr, Min(sz, len));
 		sql_buffer_setbit(&attr->nullmap, row_index);
-		sql_buffer_append(&attr->extra, addr, sz);
-		sql_buffer_append(&attr->values, &attr->extra.usage, sizeof(uint32));
+		sql_buffer_append(&attr->values, temp, len);
 	}
 }
 
@@ -867,14 +862,15 @@ assignArrowTypeUtf8(SQLattribute *attr, int *p_numBuffers)
 static void
 assignArrowTypeBpchar(SQLattribute *attr, int *p_numBuffers)
 {
-	attr->arrow_type.tag	= ArrowNodeTag__Utf8;
-	attr->arrow_typename	= "Utf8";
+	attr->arrow_type.tag	= ArrowNodeTag__FixedSizeBinary;
+	attr->arrow_type.FixedSizeBinary.byteWidth = attr->atttypmod;
+	attr->arrow_typename	= "FixedSizeBinary";
 	attr->put_value			= put_bpchar_value;
-	attr->buffer_usage		= buffer_usage_varlena_type;
-	attr->setup_buffer		= setup_buffer_varlena_type;
-	attr->write_buffer		= write_buffer_varlena_type;
+	attr->buffer_usage		= buffer_usage_inline_type;
+	attr->setup_buffer		= setup_buffer_inline_type;
+	attr->write_buffer		= write_buffer_inline_type;
 
-	*p_numBuffers += 3;		/* nullmap + index + extra */
+	*p_numBuffers += 2;		/* nullmap + values */
 }
 
 static void

@@ -348,6 +348,9 @@ pgsql_end_query(PGconn *conn)
 		Elog("failed on close cursor '%s': %s", CURSOR_NAME,
 			 PQresultErrorMessage(res));
 	PQclear(res);
+
+	/* close the connection */
+	PQfinish(conn);
 }
 
 /*
@@ -666,6 +669,7 @@ int main(int argc, char * const argv[])
 				"        so, a temporary file '%s' was built instead.\n",
 				temp_filename);
 	}
+	//pgsql_dump_buffer(table);
 	/* write header portion */
 	nbytes = write(table->fdesc, "ARROW1\0\0", 8);
 	if (nbytes != 8)
