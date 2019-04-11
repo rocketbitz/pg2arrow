@@ -42,7 +42,7 @@ usage(void)
 		  "\n"
 		  "Arrow format options:\n"
 		  "  -s, --segment-size=SIZE size of record batch for each\n"
-		  "      (default is 512MB)\n"
+		  "      (default: 256MB)\n"
 		  "\n"
 		  "Connection options:\n"
 		  "  -h, --host=HOSTNAME     database server host\n"
@@ -197,7 +197,7 @@ parse_options(int argc, char * const argv[])
 		exit(0);
 	}
 	if (batch_segment_sz == 0)
-		batch_segment_sz = (1UL << 29);		/* 512MB in default */
+		batch_segment_sz = (1UL << 28);		/* 256MB in default */
 	if (sql_file)
 	{
 		int			fdesc;
