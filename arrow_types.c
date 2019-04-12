@@ -161,9 +161,7 @@ put_decimal_value(SQLattribute *attr,
 		int		ndigits	= ntohs(rawdata->ndigits);
 		int		weight	= ntohs(rawdata->weight);
 		int		sign	= ntohs(rawdata->sign);
-		//int	dscale	= ntohs(rawdata->dscale);
-		//int	precision = attr->arrow_type.Decimal.precision;
-		int		ascale	= attr->arrow_type.Decimal.scale;
+		int		precision = attr->arrow_type.Decimal.precision;
 		int128	value = 0;
 		int		d, dig;
 
@@ -180,23 +178,23 @@ put_decimal_value(SQLattribute *attr,
 		}
 
 		/* makes floating point portion if any */
-		while (ascale > 0)
+		while (precision > 0)
 		{
 			dig = (d >= 0 && d < ndigits) ? ntohs(rawdata->digits[d]) : 0;
 			if (dig < 0 || dig >= NBASE)
 				Elog("Numeric digit is out of range: %d", (int)dig);
 
-			if (ascale >= DEC_DIGITS)
+			if (precision >= DEC_DIGITS)
 				value = NBASE * value + dig;
-			else if (ascale == 3)
+			else if (precision == 3)
 				value = 1000L * value + dig / 10L;
-			else if (ascale == 2)
+			else if (precision == 2)
 				value =  100L * value + dig / 100L;
-			else if (ascale == 1)
+			else if (precision == 1)
 				value =   10L * value + dig / 1000L;
 			else
 				Elog("internal bug");
-			ascale -= DEC_DIGITS;
+			precision -= DEC_DIGITS;
 			d++;
 		}
 		/* is it a negative value? */
@@ -892,8 +890,8 @@ assignArrowTypeDecimal(SQLattribute *attr, int *p_numBuffers)
 {
 #ifdef PG_INT128_TYPE
 	int		typmod			= attr->atttypmod;
-	int		precision		= 30;	/* default, if typmod == -1 */
-	int		scale			= 11;	/* default, if typmod == -1 */
+	int		precision		= 11;	/* default, if typmod == -1 */
+	int		scale			= 30;	/* default, if typmod == -1 */
 
 	if (typmod >= VARHDRSZ)
 	{
