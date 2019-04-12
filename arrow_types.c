@@ -287,9 +287,10 @@ put_bpchar_value(SQLattribute *attr,
 				 const char *addr, int sz)
 {
 	size_t		row_index = attr->nitems++;
-	int			len = attr->atttypmod;
+	int			len = attr->atttypmod - VARHDRSZ;
 	char	   *temp = alloca(len);
 
+	assert(len > 0);
 	memset(temp, ' ', len);
 	if (!addr)
 	{
@@ -860,8 +861,11 @@ assignArrowTypeUtf8(SQLattribute *attr, int *p_numBuffers)
 static void
 assignArrowTypeBpchar(SQLattribute *attr, int *p_numBuffers)
 {
+	if (attr->atttypmod <= VARHDRSZ)
+		Elog("unexpected Bpchar definition (typmod=%d)", attr->atttypmod);
+
 	attr->arrow_type.tag	= ArrowNodeTag__FixedSizeBinary;
-	attr->arrow_type.FixedSizeBinary.byteWidth = attr->atttypmod;
+	attr->arrow_type.FixedSizeBinary.byteWidth = attr->atttypmod - VARHDRSZ;
 	attr->arrow_typename	= "FixedSizeBinary";
 	attr->put_value			= put_bpchar_value;
 	attr->buffer_usage		= buffer_usage_inline_type;
