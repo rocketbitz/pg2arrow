@@ -15,14 +15,14 @@ static PGresult *pgsql_next_result(PGconn *conn);
 static void      pgsql_end_query(PGconn *conn);
 
 /* command options */
-static char	   *sql_command = NULL;
+//static char	   *sql_command = NULL;
 static char	   *output_filename = NULL;
-static size_t	batch_segment_sz = 0;
-static char	   *pgsql_hostname = NULL;
-static char	   *pgsql_portno = NULL;
-static char	   *pgsql_username = NULL;
+static size_t	batch_segment_sz = (1UL << 30);
+static char	   *pgsql_hostname = "127.0.0.1";
+static char	   *pgsql_portno = "5432";
+static char	   *pgsql_username = "postgres";
 static int		pgsql_password_prompt = 0;
-static char	   *pgsql_database = NULL;
+static char	   *pgsql_database = "postgres";
 static char	   *dump_arrow_filename = NULL;
 int				shows_progress = 0;
 
@@ -60,176 +60,176 @@ usage(void)
 	exit(1);
 }
 
-static void
-parse_options(int argc, char * const argv[])
-{
-	static struct option long_options[] = {
-		{"dbname",       required_argument,  NULL,  'd' },
-		{"command",      required_argument,  NULL,  'c' },
-		{"file",         required_argument,  NULL,  'f' },
-		{"output",       required_argument,  NULL,  'o' },
-		{"segment-size", required_argument,  NULL,  's' },
-		{"host",         required_argument,  NULL,  'h' },
-		{"port",         required_argument,  NULL,  'p' },
-		{"username",     required_argument,  NULL,  'U' },
-		{"no-password",  no_argument,        NULL,  'w' },
-		{"password",     no_argument,        NULL,  'W' },
-		{"dump",         required_argument,  NULL, 1000 },
-		{"progress",     no_argument,        NULL, 1001 },
-		{"help",         no_argument,        NULL, 9999 },
-		{NULL, 0, NULL, 0},
-	};
-	int			c;
-	char	   *pos;
-	char	   *sql_file = NULL;
+// static void
+// parse_options(int argc, char * const argv[])
+// {
+// 	static struct option long_options[] = {
+// 		{"dbname",       required_argument,  NULL,  'd' },
+// 		{"command",      required_argument,  NULL,  'c' },
+// 		{"file",         required_argument,  NULL,  'f' },
+// 		{"output",       required_argument,  NULL,  'o' },
+// 		{"segment-size", required_argument,  NULL,  's' },
+// 		{"host",         required_argument,  NULL,  'h' },
+// 		{"port",         required_argument,  NULL,  'p' },
+// 		{"username",     required_argument,  NULL,  'U' },
+// 		{"no-password",  no_argument,        NULL,  'w' },
+// 		{"password",     no_argument,        NULL,  'W' },
+// 		{"dump",         required_argument,  NULL, 1000 },
+// 		{"progress",     no_argument,        NULL, 1001 },
+// 		{"help",         no_argument,        NULL, 9999 },
+// 		{NULL, 0, NULL, 0},
+// 	};
+// 	int			c;
+// 	char	   *pos;
+// 	char	   *sql_file = NULL;
 
-	while ((c = getopt_long(argc, argv, "d:c:f:o:s:n:dh:p:U:wW",
-							long_options, NULL)) >= 0)
-	{
-		switch (c)
-		{
-			case 'd':
-				if (pgsql_database)
-					Elog("-d option specified twice");
-				pgsql_database = optarg;
-				break;
-			case 'c':
-				if (sql_command)
-					Elog("-c option specified twice");
-				if (sql_file)
-					Elog("-c and -f options are exclusive");
-				sql_command = optarg;
-				break;
-			case 'f':
-				if (sql_file)
-					Elog("-f option specified twice");
-				if (sql_command)
-					Elog("-c and -f options are exclusive");
-				sql_file = optarg;
-				break;
-			case 'o':
-				if (output_filename)
-					Elog("-o option specified twice");
-				output_filename = optarg;
-				break;
-			case 's':
-				if (batch_segment_sz != 0)
-					Elog("-s option specified twice");
-				pos = optarg;
-				while (isdigit(*pos))
-					pos++;
-				if (*pos == '\0')
-					batch_segment_sz = atol(optarg);
-				else if (strcasecmp(pos, "k") == 0 ||
-						 strcasecmp(pos, "kb") == 0)
-					batch_segment_sz = atol(optarg) * (1UL << 10);
-				else if (strcasecmp(pos, "m") == 0 ||
-						 strcasecmp(pos, "mb") == 0)
-					batch_segment_sz = atol(optarg) * (1UL << 20);
-				else if (strcasecmp(pos, "g") == 0 ||
-						 strcasecmp(pos, "gb") == 0)
-					batch_segment_sz = atol(optarg) * (1UL << 30);
-				else
-					Elog("segment size is not valid: %s", optarg);
-				break;
-			case 'h':
-				if (pgsql_hostname)
-					Elog("-h option specified twice");
-				pgsql_hostname = optarg;
-				break;
-			case 'p':
-				if (pgsql_portno)
-					Elog("-p option specified twice");
-				pgsql_portno = optarg;
-				break;
-			case 'U':
-				if (pgsql_username)
-					Elog("-U option specified twice");
-				pgsql_username = optarg;
-				break;
-			case 'w':
-				if (pgsql_password_prompt > 0)
-					Elog("-w and -W options are exclusive");
-				pgsql_password_prompt = -1;
-				break;
-			case 'W':
-				if (pgsql_password_prompt < 0)
-					Elog("-w and -W options are exclusive");
-				pgsql_password_prompt = 1;
-				break;
-			case 1000:		/* --dump */
-				if (dump_arrow_filename)
-					Elog("--dump option specified twice");
-				dump_arrow_filename = optarg;
-				break;
-			case 1001:		/* --progress */
-				shows_progress = 1;
-				break;
-			case 9999:		/* --help */
-			default:
-				usage();
-				break;
-		}
-	}
-	if (optind + 1 == argc)
-	{
-		if (pgsql_database)
-			Elog("database name was specified twice");
-		pgsql_database = argv[optind];
-	}
-	else if (optind + 2 == argc)
-	{
-		if (pgsql_database)
-			Elog("database name was specified twice");
-		if (pgsql_username)
-			Elog("database user was specified twice");
-		pgsql_database = argv[optind];
-		pgsql_username = argv[optind + 1];
-	}
-	else if (optind != argc)
-		Elog("Too much command line arguments");
-	/*
-	 * special code path if '--dump' option is specified.
-	 */
-	if (dump_arrow_filename)
-	{
-		readArrowFile(dump_arrow_filename);
-		exit(0);
-	}
-	if (batch_segment_sz == 0)
-		batch_segment_sz = (1UL << 28);		/* 256MB in default */
-	if (sql_file)
-	{
-		int			fdesc;
-		char	   *buffer;
-		struct stat	st_buf;
-		ssize_t		nbytes, offset = 0;
+// 	while ((c = getopt_long(argc, argv, "d:c:f:o:s:n:dh:p:U:wW",
+// 							long_options, NULL)) >= 0)
+// 	{
+// 		switch (c)
+// 		{
+// 			case 'd':
+// 				if (pgsql_database)
+// 					Elog("-d option specified twice");
+// 				pgsql_database = optarg;
+// 				break;
+// 			case 'c':
+// 				if (sql_command)
+// 					Elog("-c option specified twice");
+// 				if (sql_file)
+// 					Elog("-c and -f options are exclusive");
+// 				sql_command = optarg;
+// 				break;
+// 			case 'f':
+// 				if (sql_file)
+// 					Elog("-f option specified twice");
+// 				if (sql_command)
+// 					Elog("-c and -f options are exclusive");
+// 				sql_file = optarg;
+// 				break;
+// 			case 'o':
+// 				if (output_filename)
+// 					Elog("-o option specified twice");
+// 				output_filename = optarg;
+// 				break;
+// 			case 's':
+// 				if (batch_segment_sz != 0)
+// 					Elog("-s option specified twice");
+// 				pos = optarg;
+// 				while (isdigit(*pos))
+// 					pos++;
+// 				if (*pos == '\0')
+// 					batch_segment_sz = atol(optarg);
+// 				else if (strcasecmp(pos, "k") == 0 ||
+// 						 strcasecmp(pos, "kb") == 0)
+// 					batch_segment_sz = atol(optarg) * (1UL << 10);
+// 				else if (strcasecmp(pos, "m") == 0 ||
+// 						 strcasecmp(pos, "mb") == 0)
+// 					batch_segment_sz = atol(optarg) * (1UL << 20);
+// 				else if (strcasecmp(pos, "g") == 0 ||
+// 						 strcasecmp(pos, "gb") == 0)
+// 					batch_segment_sz = atol(optarg) * (1UL << 30);
+// 				else
+// 					Elog("segment size is not valid: %s", optarg);
+// 				break;
+// 			case 'h':
+// 				if (pgsql_hostname)
+// 					Elog("-h option specified twice");
+// 				pgsql_hostname = optarg;
+// 				break;
+// 			case 'p':
+// 				if (pgsql_portno)
+// 					Elog("-p option specified twice");
+// 				pgsql_portno = optarg;
+// 				break;
+// 			case 'U':
+// 				if (pgsql_username)
+// 					Elog("-U option specified twice");
+// 				pgsql_username = optarg;
+// 				break;
+// 			case 'w':
+// 				if (pgsql_password_prompt > 0)
+// 					Elog("-w and -W options are exclusive");
+// 				pgsql_password_prompt = -1;
+// 				break;
+// 			case 'W':
+// 				if (pgsql_password_prompt < 0)
+// 					Elog("-w and -W options are exclusive");
+// 				pgsql_password_prompt = 1;
+// 				break;
+// 			case 1000:		/* --dump */
+// 				if (dump_arrow_filename)
+// 					Elog("--dump option specified twice");
+// 				dump_arrow_filename = optarg;
+// 				break;
+// 			case 1001:		/* --progress */
+// 				shows_progress = 1;
+// 				break;
+// 			case 9999:		/* --help */
+// 			default:
+// 				usage();
+// 				break;
+// 		}
+// 	}
+// 	if (optind + 1 == argc)
+// 	{
+// 		if (pgsql_database)
+// 			Elog("database name was specified twice");
+// 		pgsql_database = argv[optind];
+// 	}
+// 	else if (optind + 2 == argc)
+// 	{
+// 		if (pgsql_database)
+// 			Elog("database name was specified twice");
+// 		if (pgsql_username)
+// 			Elog("database user was specified twice");
+// 		pgsql_database = argv[optind];
+// 		pgsql_username = argv[optind + 1];
+// 	}
+// 	else if (optind != argc)
+// 		Elog("Too much command line arguments");
+// 	/*
+// 	 * special code path if '--dump' option is specified.
+// 	 */
+// 	if (dump_arrow_filename)
+// 	{
+// 		readArrowFile(dump_arrow_filename);
+// 		exit(0);
+// 	}
+// 	if (batch_segment_sz == 0)
+// 		batch_segment_sz = (1UL << 28);		/* 256MB in default */
+// 	if (sql_file)
+// 	{
+// 		int			fdesc;
+// 		char	   *buffer;
+// 		struct stat	st_buf;
+// 		ssize_t		nbytes, offset = 0;
 
-		assert(!sql_command);
-		fdesc = open(sql_file, O_RDONLY);
-		if (fdesc < 0)
-			Elog("failed on open '%s': %m", sql_file);
-		if (fstat(fdesc, &st_buf) != 0)
-			Elog("failed on fstat(2) on '%s': %m", sql_file);
-		buffer = palloc(st_buf.st_size + 1);
-		while (offset < st_buf.st_size)
-		{
-			nbytes = read(fdesc, buffer + offset, st_buf.st_size - offset);
-			if (nbytes < 0)
-			{
-				if (errno != EINTR)
-					Elog("failed on read('%s'): %m", sql_file);
-			}
-			else if (nbytes == 0)
-				break;
-		}
-		buffer[offset] = '\0';
+// 		assert(!sql_command);
+// 		fdesc = open(sql_file, O_RDONLY);
+// 		if (fdesc < 0)
+// 			Elog("failed on open '%s': %m", sql_file);
+// 		if (fstat(fdesc, &st_buf) != 0)
+// 			Elog("failed on fstat(2) on '%s': %m", sql_file);
+// 		buffer = palloc(st_buf.st_size + 1);
+// 		while (offset < st_buf.st_size)
+// 		{
+// 			nbytes = read(fdesc, buffer + offset, st_buf.st_size - offset);
+// 			if (nbytes < 0)
+// 			{
+// 				if (errno != EINTR)
+// 					Elog("failed on read('%s'): %m", sql_file);
+// 			}
+// 			else if (nbytes == 0)
+// 				break;
+// 		}
+// 		buffer[offset] = '\0';
 
-		sql_command = buffer;
-	}
-	else if (!sql_command)
-		Elog("Neither -c nor -f options are specified");
-}
+// 		sql_command = buffer;
+// 	}
+// 	else if (!sql_command)
+// 		Elog("Neither -c nor -f options are specified");
+// }
 
 static PGconn *
 pgsql_server_connect(void)
@@ -630,14 +630,17 @@ writeArrowFooter(SQLtable *table)
 /*
  * Entrypoint of pg2arrow
  */
-int main(int argc, char * const argv[])
+char * query(char * sql_command)
 {
 	PGconn	   *conn;
 	PGresult   *res;
 	SQLtable   *table = NULL;
 	ssize_t		nbytes;
+	int p[2]; pipe(p);
+	char * buf;
 
-	parse_options(argc, argv);
+
+
 	/* open PostgreSQL connection */
 	conn = pgsql_server_connect();
 	/* run SQL command */
@@ -646,29 +649,10 @@ int main(int argc, char * const argv[])
 		Elog("SQL command returned an empty result");
 	table = pgsql_create_buffer(conn, res, batch_segment_sz);
 	/* open the output file */
-	if (output_filename)
-	{
-		table->fdesc = open(output_filename,
-							O_RDWR | O_CREAT | O_TRUNC, 0644);
-		if (table->fdesc < 0)
-			Elog("failed to open '%s'", output_filename);
-		table->filename = output_filename;
-	}
-	else
-	{
-		char	temp_filename[128];
-
-		strcpy(temp_filename, "/tmp/XXXXXX.arrow");
-		table->fdesc = mkostemps(temp_filename, 6,
-								 O_RDWR | O_CREAT | O_TRUNC);
-		if (table->fdesc < 0)
-			Elog("failed to open '%s' : %m", temp_filename);
-		table->filename = pstrdup(temp_filename);
-		fprintf(stderr,
-				"notice: -o, --output=FILENAME options was not specified,\n"
-				"        so, a temporary file '%s' was built instead.\n",
-				temp_filename);
-	}
+	table->fdesc = p[1];
+	if (table->fdesc < 0)
+		Elog("failed to open '%s'", output_filename);
+	table->filename = output_filename;
 	//pgsql_dump_buffer(table);
 	/* write header portion */
 	nbytes = write(table->fdesc, "ARROW1\0\0", 8);
@@ -686,7 +670,13 @@ int main(int argc, char * const argv[])
 		pgsql_writeout_buffer(table);
 	nbytes = writeArrowFooter(table);
 
-	return 0;
+	buf = (char *)malloc(nbytes);
+
+	FILE *f = fdopen( p[0], "r" );
+
+	fgets(buf, nbytes, f);
+
+	return buf;
 }
 
 
